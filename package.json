@@ -1,28 +1,47 @@
 {
-  "name": "trading-bot",
-  "version": "1.0.0",
-  "description": "Trading bot",
-  "main": "index.ts",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/EDZakharov/trading-bot.git"
-  },
-  "keywords": [
-    "trading",
-    "bot",
-    "tradebot",
-    "bybit",
-    "binance",
-    "okex",
-    "mexc"
-  ],
-  "author": "EDZakharov",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/EDZakharov/trading-bot/issues"
-  },
-  "homepage": "https://github.com/EDZakharov/trading-bot#readme"
+    "name": "trading-bot",
+    "version": "1.0.0",
+    "description": "Trading bot",
+    "main": "index.ts",
+    "scripts": {
+        "dev": "tsx watch src/index.ts",
+        "str": "tsx watch src/Strategies/RSI.ts",
+        "start": "nodemon ./build/src/index.js",
+        "check": "tsc",
+        "test": "jest --runInBand --force-exit "
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/EDZakharov/trading-bot.git"
+    },
+    "keywords": [
+        "trading",
+        "bot",
+        "tradebot",
+        "bybit",
+        "binance",
+        "okex",
+        "mexc"
+    ],
+    "author": "EDZakharov",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/EDZakharov/trading-bot/issues"
+    },
+    "homepage": "https://github.com/EDZakharov/trading-bot#readme",
+    "type": "commonjs",
+    "dependencies": {
+        "bybit-api": "^3.7.8",
+        "dotenv": "^16.3.1"
+    },
+    "devDependencies": {
+        "@babel/preset-env": "^7.24.3",
+        "@babel/preset-typescript": "^7.24.1",
+        "@types/jest": "^29.5.12",
+        "@types/node": "^20.10.4",
+        "nodemon": "^3.0.2",
+        "ts-jest": "^29.1.2",
+        "tsx": "^4.6.2",
+        "typescript": "^5.3.3"
+    }
 }
