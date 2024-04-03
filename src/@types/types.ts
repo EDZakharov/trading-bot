@@ -18,6 +18,15 @@ export interface IBotConfig {
     insuranceOrderVolumeUSDT: number;
     insuranceOrderVolumeMultiplier: number;
 }
+export interface IBotConfig1 {
+    targetProfitPercent: number;
+    startOrderVolumeUSDT: number;
+    insuranceOrderSteps: number;
+    insuranceOrderPriceDeviationPercent: number;
+    insuranceOrderStepsMultiplier: number;
+    insuranceOrderVolumeUSDT: number;
+    insuranceOrderVolumeMultiplier: number;
+}
 
 export interface IBotSetupConfig {
     setTargetProfitPercent(props: number): void;

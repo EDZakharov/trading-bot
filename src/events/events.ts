@@ -11,3 +11,7 @@ export enum TradeType {
     START_TRADE = 'startTrade',
     STOP_TRADE = 'stopTrade',
 }
+export enum StrategyType {
+    GENERATE_STRATEGY = 'generateStrategy',
+    CHANGE_INSURANCE_STEP = 'changeInsuranceStep',
+}

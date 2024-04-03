@@ -1,7 +1,10 @@
 import { EventEmitter } from 'events';
 
+import { IBuyOrdersStepsToGrid } from '../@types/types';
 import { RSI, timeInterval } from '../strategy/RSI';
-import { PriceType, RsiDealType, TradeType } from './events';
+import { generateBotStrategy } from '../strategy/generateDCA';
+import { sleep } from '../utils/sleep';
+import { PriceType, RsiDealType, StrategyType, TradeType } from './events';
 
 export class PriceTracker extends EventEmitter {
     private currentPrice: number;
@@ -24,7 +27,6 @@ export class PriceTracker extends EventEmitter {
  * Inherits from EventEmitter.
  */
 export class RsiDealTracker extends EventEmitter {
-    private dealStatus = false; // Flag indicating the status of the deal
     private coin: string; // Name of the coin being tracked
 
     /**
@@ -34,29 +36,6 @@ export class RsiDealTracker extends EventEmitter {
     constructor(initialCoin: string) {
         super();
         this.coin = initialCoin;
-    }
-
-    /**
-     * Private method to update the deal status and emit events.
-     * @param newDealStatus The new status of the deal
-     * @param emit The event type to emit
-     * @param rest Additional data to include in the emitted event
-     */
-    private updateDealStatus(
-        newDealStatus: boolean,
-        emit: RsiDealType,
-        rest?: any
-    ) {
-        if (newDealStatus !== this.dealStatus) {
-            this.dealStatus = newDealStatus;
-            // Emitting an event with updated deal status and additional data
-
-            this.emit(emit, {
-                coin: this.coin,
-                status: this.dealStatus,
-                ...rest,
-            });
-        }
     }
 
     /**
@@ -75,21 +54,27 @@ export class RsiDealTracker extends EventEmitter {
         candlesCount: number;
     }) {
         try {
-            // Getting RSI data for the specified symbol
-            const rsiData = await RSI(symbol, timeInterval, candlesCount);
-            // Updating deal status and emitting RSI_START_DEAL event
+            let rsiData = await RSI(symbol, timeInterval, candlesCount);
+            console.log('RSI monitoring... ', symbol);
 
-            setTimeout(() => {
-                this.updateDealStatus(
-                    true,
-                    RsiDealType.RSI_START_DEAL,
-                    rsiData
-                );
-            }, 5000);
-
-            // Handling RSI data (example: logging RSI value)
-            // console.log(`RSI for ${symbol}: ${data.relativeStrengthIndex}`);
-            // Other actions, including trading and updating deal status
+            while (true) {
+                if (rsiData.relativeStrengthIndex < 30) {
+                    console.log('RSI waiting... ', symbol);
+                    while (rsiData.rsiConclusion !== 'normal') {
+                        rsiData = await RSI(symbol, timeInterval, candlesCount);
+                        await sleep(2000);
+                    }
+                    console.log('RSI starting... ', symbol);
+                    this.emit(RsiDealType.RSI_START_DEAL, {
+                        coin: this.coin,
+                        rsi: { ...rsiData },
+                    });
+                    break;
+                } else {
+                    await sleep(2000);
+                    continue;
+                }
+            }
         } catch (error) {
             console.error('Error while tracking RSI:', error);
         }
@@ -102,8 +87,9 @@ export class TradeTracker extends EventEmitter {
         super();
         this.coin = initialCoin;
 
-        this.on(TradeType.START_TRADE, () => {
-            console.log('start trade', this.coin);
+        this.on(TradeType.START_TRADE, (strategy: IBuyOrdersStepsToGrid[]) => {
+            console.log(this.coin);
+            console.table(strategy);
         });
 
         this.on(TradeType.STOP_TRADE, () => {
@@ -111,16 +97,59 @@ export class TradeTracker extends EventEmitter {
         });
     }
 
-    public startTrade() {
-        this.emit(TradeType.START_TRADE);
+    public async startTrade(strategy: IBuyOrdersStepsToGrid[] | []) {
+        if (strategy.length === 0) {
+            this.emit(TradeType.STOP_TRADE, 'stop');
+        }
+        this.emit(TradeType.START_TRADE, strategy);
     }
 
     public async stopTrade() {
-        return new Promise<void>((resolve) => {
-            setTimeout(() => {
-                this.emit(TradeType.STOP_TRADE);
-                resolve();
-            }, 5000); // Задержка в 5 секунд
-        });
+        this.emit(TradeType.STOP_TRADE);
+    }
+}
+
+export class StrategyTracker extends EventEmitter {
+    botSettings: null;
+    coin: string;
+    strategy: IBuyOrdersStepsToGrid[] | undefined;
+
+    constructor(initialCoin: string, botSettings: any) {
+        super();
+        this.coin = initialCoin;
+        this.botSettings = botSettings;
+
+        // this.on(StrategyType.CHANGE_INSURANCE_STEP, (data: any) => {
+        //     // console.log('start trade', this.coin);
+        //     return data;
+        // });
+
+        // this.on(
+        //     StrategyType.GENERATE_STRATEGY,
+        //     (strategy: IBuyOrdersStepsToGrid[]) => {
+        //         console.log('stop trade', strategy);
+        //     }
+        // );
+    }
+
+    public generateStrategy() {
+        const strategy = generateBotStrategy(
+            this.coin,
+            this.botSettings,
+            16660,
+            0.000000001
+        );
+
+        if (!strategy) {
+            this.strategy = [];
+        } else {
+            this.strategy = strategy;
+        }
+
+        this.emit(StrategyType.GENERATE_STRATEGY, this.strategy);
+    }
+
+    public async stopTrade() {
+        this.emit(TradeType.STOP_TRADE);
     }
 }

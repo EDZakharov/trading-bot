@@ -1,58 +1,62 @@
-import { RsiDealTracker, TradeTracker } from './eventEmitters';
-import { TradeType } from './events';
+import { startBot } from '..';
 
-describe('RsiDealTracker', () => {
-    let rsiDealTracker: RsiDealTracker;
+describe('startBot', () => {
+    test('should handle missing symbols', async () => {
+        console.error = jest.fn();
 
-    beforeEach(() => {
-        rsiDealTracker = new RsiDealTracker('BTCUSDT');
+        await startBot();
+
+        expect(console.error).toHaveBeenCalledWith(
+            'Error: Symbols must be an array and not empty'
+        );
     });
 
-    it('should be initialized with the correct initial coin', () => {
-        expect(rsiDealTracker['coin']).toBe('BTCUSDT');
+    test('should handle missing botConfig', async () => {
+        console.error = jest.fn();
+
+        await startBot(['BTCUSDT']);
+
+        expect(console.error).toHaveBeenCalledWith(
+            'Error: Bot configuration is missing'
+        );
     });
 
-    it('should update deal status and emit event when starting RSI tracking', async () => {
-        const symbol = 'BTCUSDT';
-        const timeInterval = '1';
-        const candlesCount = 14;
+    test('should start the bot with given symbols and botConfig', async () => {
+        const symbols = ['BTCUSDT', 'XRPUSDT'];
+        const botConfig = {
+            targetProfitPercent: 0.1,
+            startOrderVolumeUSDT: 0.1,
+            insuranceOrderSteps: 10,
+            insuranceOrderPriceDeviationPercent: 0.1,
+            insuranceOrderStepsMultiplier: 0.1,
+            insuranceOrderVolumeUSDT: 0.1,
+            insuranceOrderVolumeMultiplier: 0.1,
+        };
 
-        const emitSpy = jest.spyOn(rsiDealTracker, 'emit');
+        console.log = jest.fn();
+        console.table = jest.fn();
 
-        await rsiDealTracker.startRsiTracking({
-            symbol,
-            timeInterval,
-            candlesCount,
-        });
+        await startBot(symbols, botConfig);
 
-        expect(emitSpy).toHaveBeenCalledWith('rsiStartDeal', {
-            coin: 'BTCUSDT',
-            status: true,
-            relativeStrengthIndex: expect.any(Number),
-            rsiConclusion: expect.any(String),
-            trendConclusion: expect.any(String),
-        });
+        const expectedStepStructure = {
+            step: expect.any(Number),
+            orderDeviation: expect.any(Number),
+            orderSecondaryPairVolume: expect.any(Number),
+            orderBasePairVolume: expect.any(Number),
+            orderPriceToStep: expect.any(Number),
+            orderAveragePrice: expect.any(Number),
+            orderTargetPrice: expect.any(Number),
+            orderTargetDeviation: expect.any(Number),
+            summarizedOrderSecondaryPairVolume: expect.any(Number),
+            summarizedOrderBasePairVolume: expect.any(Number),
+        };
+
+        expect(console.log).toHaveBeenCalledWith('Bot online for coins:');
+        expect(console.log).toHaveBeenCalledWith('Bot settings:');
+        expect(console.table).toHaveBeenCalledWith(symbols);
+        expect(console.table).toHaveBeenCalledWith(botConfig);
+        expect(console.table).toHaveBeenCalledWith(
+            expect.arrayContaining([expectedStepStructure])
+        );
     });
-});
-
-describe('TradeTracker', () => {
-    let tradeTracker: TradeTracker;
-
-    beforeEach(() => {
-        tradeTracker = new TradeTracker('BTCUSDT');
-    });
-
-    it('should emit START_TRADE event when startTrade() is called', () => {
-        const onStartTrade = jest.fn();
-        tradeTracker.on(TradeType.START_TRADE, onStartTrade);
-        tradeTracker.startTrade();
-        expect(onStartTrade).toHaveBeenCalled();
-    });
-
-    it('should emit STOP_TRADE event when stopTrade() is called', async () => {
-        const onStopTrade = jest.fn();
-        tradeTracker.on(TradeType.STOP_TRADE, onStopTrade);
-        await tradeTracker.stopTrade();
-        expect(onStopTrade).toHaveBeenCalled();
-    }, 6000);
 });
