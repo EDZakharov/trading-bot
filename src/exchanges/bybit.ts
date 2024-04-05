@@ -1,4 +1,3 @@
-import { RestClientV5 } from 'bybit-api';
 import 'dotenv/config';
 import { IRestClientOptions } from '../@types/types';
 
@@ -37,15 +36,22 @@ import { IRestClientOptions } from '../@types/types';
 /** throwOnFailedRateLimitParse?: boolean;
  * Default: false. Enable to throw error if rate limit parser fails */
 
-const restClientOptions: IRestClientOptions = {
-    testnet: false,
-    key: process.env['API_KEY'],
-    secret: process.env['API_SECRET_KEY'],
+export const BybitRestClientV5Options: IRestClientOptions = {
+    testnet: process.env['API_STATUS_TESTNET'] === 'true' ? true : false,
+    key:
+        process.env['API_STATUS_TESTNET'] === 'true'
+            ? process.env['API_TESTNET_BYBIT_KEY']
+            : process.env['API_KEY'],
+    secret:
+        process.env['API_STATUS_TESTNET'] === 'true'
+            ? process.env['API_TESTNET_BYBIT_SECRET_KEY']
+            : process.env['API_SECRET_KEY'],
     enable_time_sync: true,
     recv_window: 5000,
-    baseUrl: 'https://api.bybit.com/',
+    baseUrl:
+        process.env['API_STATUS_TESTNET'] === 'true'
+            ? 'https://api-testnet.bybit.com/'
+            : 'https://api.bybit.com/',
 };
 
-const restClient = new RestClientV5(restClientOptions);
-
-export default restClient;
+export default BybitRestClientV5Options;

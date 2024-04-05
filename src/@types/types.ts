@@ -1,5 +1,13 @@
 import { Method } from 'axios';
 
+export type exchanges =
+    | 'bybit'
+    | 'binance'
+    | 'okex'
+    | 'bitmart'
+    | 'bitget'
+    | 'none';
+
 export interface IRestClientOptions {
     key?: string;
     secret?: string;

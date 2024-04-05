@@ -6,107 +6,99 @@
 //  '49.488567', Trade volume. Unit of contract: pieces of contract. Unit of spot: quantity of coins
 //  '2081893.39321404' Turnover. Unit of figure: quantity of quota coin
 
+import { currentConnectedExchange } from '..';
 import { verifiedSymbols } from '../@types/types';
-import restClient from '../exchanges/restClient';
-import { sleep } from '../utils/sleep';
 
 export const RSI = async function (
-    symbol: string = 'BTCUSDT',
-    interval: timeInterval = '1',
-    limit: number = 14
-): Promise<{
-    rsiConclusion: string;
-    trendConclusion: string;
-    relativeStrengthIndex: number;
-}> {
-    let candles = undefined;
-    GET_KLINE: while (!candles) {
-        try {
-            candles = await restClient.getKline({
-                category: 'spot',
-                symbol,
-                interval,
-                limit,
-            });
+    symbol: string,
+    interval: timeInterval,
+    limit: number
+): Promise<
+    | {
+          rsiConclusion: string;
+          trendConclusion: string;
+          relativeStrengthIndex: number;
+      }
+    | undefined
+> {
+    let klines: Array<candles> | undefined =
+        await currentConnectedExchange.getklines(symbol, interval, limit);
 
-            if (!candles || !candles.result.list) {
-                candles = undefined;
-                await sleep(5000);
-                continue GET_KLINE;
-            }
-        } catch (error) {
-            console.error(error);
-            candles = undefined;
-            await sleep(5000);
-            continue GET_KLINE;
-        }
+    if (!klines) {
+        await RSI(symbol, interval, limit);
+        return;
+    } else {
+        const greenCandles = getCandlesColor(klines, 'green');
+
+        const redCandles = getCandlesColor(klines, 'red');
+        const summarizedGreenCandlesLength = summarizingCandlesLength(
+            greenCandles,
+            'green'
+        );
+        const summarizedRedCandlesLength = summarizingCandlesLength(
+            redCandles,
+            'red'
+        );
+        const relativeStrength =
+            summarizedGreenCandlesLength / summarizedRedCandlesLength;
+        const relativeStrengthIndex = 100 - 100 / (1 + relativeStrength);
+        let precision = '0.01';
+        let rsiConclusion =
+            relativeStrengthIndex > 70
+                ? 'oversold'
+                : relativeStrengthIndex < 30
+                ? 'overbought'
+                : 'normal';
+        let trendConclusion =
+            relativeStrengthIndex > 50
+                ? 'bullish'
+                : relativeStrengthIndex < 50
+                ? 'bearish'
+                : '50/50';
+
+        return {
+            rsiConclusion,
+            trendConclusion,
+            relativeStrengthIndex:
+                Math.floor(
+                    relativeStrengthIndex * Math.pow(10, +precision.length - 2)
+                ) / Math.pow(10, +precision.length - 2),
+        };
     }
-
-    const allCandles = [...candles.result.list];
-    const greenCandles = getCandlesColor(allCandles, 'green');
-    const redCandles = getCandlesColor(allCandles, 'red');
-    const summarizedGreenCandlesLength = summarizingCandlesLength(
-        greenCandles,
-        'green'
-    );
-    const summarizedRedCandlesLength = summarizingCandlesLength(
-        redCandles,
-        'red'
-    );
-    const relativeStrength =
-        summarizedGreenCandlesLength / summarizedRedCandlesLength;
-    const relativeStrengthIndex = 100 - 100 / (1 + relativeStrength);
-    let precision = '0.01';
-    let rsiConclusion =
-        relativeStrengthIndex > 70
-            ? 'oversold'
-            : relativeStrengthIndex < 30
-            ? 'overbought'
-            : 'normal';
-    let trendConclusion =
-        relativeStrengthIndex > 50
-            ? 'bullish'
-            : relativeStrengthIndex < 50
-            ? 'bearish'
-            : '50/50';
-    return {
-        rsiConclusion,
-        trendConclusion,
-        relativeStrengthIndex:
-            Math.floor(
-                relativeStrengthIndex * Math.pow(10, +precision.length - 2)
-            ) / Math.pow(10, +precision.length - 2),
-    };
 };
 
 function getCandlesColor(
     candles: Array<candles>,
     color: 'red' | 'green'
 ): Array<candles> {
-    return candles.reduce(
-        (acc: Array<candles>, currentValue: candles): Array<candles> => {
-            if (color === 'green' && +currentValue[1] < +currentValue[4]) {
-                acc.push(currentValue);
-            } else if (color === 'red' && +currentValue[1] > +currentValue[4]) {
-                acc.push(currentValue);
-            }
+    return candles.filter((currentValue: candles) => {
+        const openPrice = parseFloat(currentValue[1]);
+        const closePrice = parseFloat(currentValue[4]);
 
-            return acc;
-        },
-        []
-    );
+        if (color === 'green') {
+            return openPrice < closePrice;
+        } else if (color === 'red') {
+            return openPrice > closePrice;
+        }
+
+        return false;
+    });
 }
 
 function summarizingCandlesLength(
     candles: Array<candles>,
     color: 'red' | 'green'
-) {
+): number {
     return candles.reduce((acc: number, currentValue): number => {
+        const openPrice = parseFloat(currentValue[1]);
+        const closePrice = parseFloat(currentValue[4]);
+
         if (color === 'green') {
-            acc += parseFloat(currentValue[4]) - parseFloat(currentValue[1]);
+            acc += closePrice - openPrice;
         } else if (color === 'red') {
-            acc += parseFloat(currentValue[1]) - parseFloat(currentValue[4]);
+            acc += openPrice - closePrice;
         }
+
         return acc;
     }, 0);
 }

@@ -1,13 +1,20 @@
-import { IBotConfig, IBuyOrdersStepsToGrid } from './@types/types';
+import { RestClientV5 } from 'bybit-api';
+import { IBotConfig, IBuyOrdersStepsToGrid, exchanges } from './@types/types';
 import {
+    ExchangeConnectionTracker,
     RsiDealTracker,
     StrategyTracker,
     TradeTracker,
 } from './events/eventEmitters';
-import { RsiDealType, StrategyType } from './events/events';
+import {
+    ExchangeConnectionType,
+    RsiDealType,
+    StrategyType,
+} from './events/events';
 import { timeInterval } from './strategy/RSI';
 
 type rsiOptions = { timeInterval: timeInterval; candlesCount: number };
+export const currentConnectedExchange = new ExchangeConnectionTracker();
 
 /**
  * Starts the bot for specified symbols.
@@ -16,6 +23,7 @@ type rsiOptions = { timeInterval: timeInterval; candlesCount: number };
  * @param botConfig - Bot configuration.
  */
 export async function startBot(
+    exchange: exchanges,
     symbols?: string[],
     botConfig?: IBotConfig,
     rsiOptions?: rsiOptions
@@ -51,9 +59,9 @@ export async function startBot(
     console.log(`Bot settings:`);
     console.table(botConfig);
 
-    const rsiPromises = symbols.map(async (symbol) => {
+    const promises = symbols.map(async (symbol) => {
         const trade = new TradeTracker(symbol);
-        const rsi = new RsiDealTracker(symbol);
+        const rsi = new RsiDealTracker();
         const strategy = new StrategyTracker(symbol, botConfig);
 
         //Event handlers
@@ -63,17 +71,37 @@ export async function startBot(
         });
 
         rsi.on(RsiDealType.RSI_START_DEAL, (result: any) => {
+            console.table(result);
             strategy.generateStrategy();
         });
 
         strategy.on(
             StrategyType.GENERATE_STRATEGY,
             (strategy: IBuyOrdersStepsToGrid[] | []) => {
-                trade.startTrade(strategy);
+                if (strategy.length !== 0) {
+                    trade.startTrade(strategy);
+                    setTimeout(() => {
+                        trade.stopTrade();
+                    }, 10000);
+                } else {
+                    console.error('Strategy length = 0');
+                }
             }
         );
-        // ______________________________________________________________
 
+        currentConnectedExchange.on(
+            ExchangeConnectionType.EXCHANGE_CONNECTED,
+            async (exchange: RestClientV5) => {
+                try {
+                    const balance = await exchange.getWalletBalance({
+                        accountType: 'UNIFIED',
+                    });
+                } catch (error) {}
+            }
+        );
+
+        // ______________________________________________________________
+        currentConnectedExchange.connectToExchange(exchange);
         if (
             !rsiOptions ||
             !rsiOptions.timeInterval ||
@@ -89,7 +117,7 @@ export async function startBot(
         }
     });
 
-    await Promise.all(rsiPromises);
+    await Promise.all(promises);
 }
 
 const botConfig = {
@@ -103,13 +131,14 @@ const botConfig = {
 };
 
 startBot(
+    'bybit',
     [
         'BTCUSDT',
         // 'XRPUSDT', 'KASUSDT', 'UNIUSDT', 'TRXUSDT', 'DOTUSDT'
     ],
     botConfig
     // {
-    //     timeInterval: '3',
-    //     candlesCount: 14,
+    //     timeInterval: '1',
+    //     candlesCount: 5,
     // }
 );
