@@ -271,6 +271,7 @@ function checkingSymbolInfo(
             console.error(`request failed: bad coinPrice`);
             return;
         }
+
         if (!minQty) {
             console.error(`request failed: bad minQty of ${symbol}`);
             return;
@@ -284,7 +285,6 @@ function checkingSymbolInfo(
             );
             return;
         }
-
         return coinPrice;
     } catch (error) {
         console.error(error);

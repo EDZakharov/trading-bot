@@ -6,13 +6,13 @@
 //  '49.488567', Trade volume. Unit of contract: pieces of contract. Unit of spot: quantity of coins
 //  '2081893.39321404' Turnover. Unit of figure: quantity of quota coin
 
-import { currentConnectedExchange } from '..';
 import { verifiedSymbols } from '../@types/types';
 
 export const RSI = async function (
     symbol: string,
     interval: timeInterval,
-    limit: number
+    limit: number,
+    klines: candles[]
 ): Promise<
     | {
           rsiConclusion: string;
@@ -21,11 +21,8 @@ export const RSI = async function (
       }
     | undefined
 > {
-    let klines: Array<candles> | undefined =
-        await currentConnectedExchange.getklines(symbol, interval, limit);
-
     if (!klines) {
-        await RSI(symbol, interval, limit);
+        await RSI(symbol, interval, limit, klines);
         return;
     } else {
         const greenCandles = getCandlesColor(klines, 'green');

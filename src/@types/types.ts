@@ -1,5 +1,7 @@
 import { Method } from 'axios';
 
+export type candles = [string, string, string, string, string, string, string];
+
 export type exchanges =
     | 'bybit'
     | 'binance'
@@ -8,6 +10,14 @@ export type exchanges =
     | 'bitget'
     | 'none';
 
+export enum Exchange {
+    Bybit = 'bybit',
+    Binance = 'binance',
+    Okex = 'okex',
+    Bitmart = 'bitmart',
+    Bitget = 'bitget',
+    None = 'none',
+}
 export interface IRestClientOptions {
     key?: string;
     secret?: string;
