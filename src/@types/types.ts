@@ -18,6 +18,7 @@ export enum Exchange {
     Bitget = 'bitget',
     None = 'none',
 }
+
 export interface IRestClientOptions {
     key?: string;
     secret?: string;

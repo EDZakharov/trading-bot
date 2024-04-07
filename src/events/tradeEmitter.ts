@@ -19,15 +19,16 @@ export class TradeTracker extends EventEmitter {
     private coin: string; // Name of the coin being tracked
     private settings: IBotConfig; // Configuration settings for the bot
     private currentPrice = 0; // Current price of the coin
+    private prevPrice = 0; // Previous price of the coin
     private strategy: IBuyOrdersStepsToGrid[] = []; // Trading strategy for the coin
+    private step: number; // Step
     private ping: NodeJS.Timeout | undefined; // Timer for updating the price
     private client: RestClientV5 | any; // Exchange client
     private exchange; // Selected exchange
     private coinPricesCache: Map<string, number> = new Map<string, number>(); // Cache for coin prices
     private coinInfo: any;
     private minQty: any;
-    private readonly stateFilePath: string =
-        __dirname + 'trade_tracker_state.json';
+    private stateFilePath: string;
 
     /**
      * Creates an instance of TradeTracker.
@@ -43,12 +44,17 @@ export class TradeTracker extends EventEmitter {
         super();
         this.coin = initialCoin;
         this.settings = initialSettings;
-
+        this.stateFilePath = __dirname + '/states/' + this.coin + '.json';
+        this.exchange = initialExchange;
+        this.step = 0;
+        if (!fs.existsSync(this.stateFilePath)) {
+            fs.writeFileSync(this.stateFilePath, '{}');
+        }
+        this.loadState();
         // Set up event listeners
-        this.on(TradeType.START_TRADE, (strategy: IBuyOrdersStepsToGrid[]) => {
+        this.on(TradeType.START_TRADE, () => {
             console.log(this.coin);
-            console.table(strategy);
-            this.strategy = strategy;
+            console.table(this.strategy);
             this.startPongPrice();
         });
 
@@ -59,7 +65,38 @@ export class TradeTracker extends EventEmitter {
         });
 
         this.on(TradeType.UPDATE_PRICE, () => {
-            console.log(this.coinPricesCache.get(this.coin));
+            let isBlue = true;
+            const firstInsurance = this.strategy[0];
+
+            if (
+                firstInsurance &&
+                +this.coinPricesCache.get(this.coin)! >=
+                    firstInsurance.orderTargetPrice
+            ) {
+                console.log('stop trade');
+
+                this.emit(TradeType.STOP_TRADE);
+            }
+
+            const nextInsurance = this.strategy[1];
+
+            if (
+                nextInsurance &&
+                +this.coinPricesCache.get(this.coin)! <=
+                    nextInsurance.orderPriceToStep
+            ) {
+                this.step = +nextInsurance.step;
+                this.strategy.shift();
+                this.saveState();
+                console.table(this.strategy);
+            }
+
+            if (+this.coinPricesCache.get(this.coin)! !== this.prevPrice) {
+                process.stdout.write('\x1b[1A\x1b[2K');
+                console.log(`Checking prices - \x1b[32m\u2B24\x1b[0m`);
+                isBlue = false;
+            }
+            this.prevPrice = +this.coinPricesCache.get(this.coin)!;
         });
 
         try {
@@ -69,14 +106,6 @@ export class TradeTracker extends EventEmitter {
         } catch (error) {
             console.error(error);
         }
-
-        this.exchange = initialExchange;
-
-        if (!fs.existsSync(this.stateFilePath)) {
-            fs.writeFileSync(this.stateFilePath, '{}');
-        }
-
-        this.loadState();
     }
 
     /**
@@ -97,6 +126,7 @@ export class TradeTracker extends EventEmitter {
             this.strategy = [];
         } else {
             this.strategy = strategy;
+            this.saveState();
         }
 
         this.emit(StrategyType.GENERATE_STRATEGY, this.strategy);
@@ -170,7 +200,7 @@ export class TradeTracker extends EventEmitter {
      * Starts updating the coin price periodically.
      */
     private async startPongPrice() {
-        console.log('starting pong price...');
+        console.log();
         this.ping = setInterval(async () => {
             const newPrice = await this.getCoinPrice(this.coin);
             if (newPrice !== this.currentPrice) {
@@ -185,8 +215,9 @@ export class TradeTracker extends EventEmitter {
      * Starts a trade with the provided strategy.
      * @param strategy The trading strategy to be applied
      */
-    public async startTrade(strategy: IBuyOrdersStepsToGrid[] | []) {
-        this.emit(TradeType.START_TRADE, strategy);
+    public async startTrade() {
+        await this.generateStrategy();
+        this.emit(TradeType.START_TRADE);
     }
 
     /**

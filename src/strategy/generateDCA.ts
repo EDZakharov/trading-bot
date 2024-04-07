@@ -233,9 +233,9 @@ function calculateOrderTargetPriceToStep(
     targetProfit: number
 ): number {
     //TEST
-    const calculate = orderAveragePrice + (targetProfit * 0.01) / 100;
-    // const calculate =
-    //     orderAveragePrice + (orderAveragePrice + targetProfit * 0.01) / 100;
+    // const calculate = orderAveragePrice + (targetProfit * 0.01) / 100;
+    const calculate =
+        orderAveragePrice + (orderAveragePrice + targetProfit * 0.01) / 100;
     return parseFloat(calculate.toFixed(8));
 }
 

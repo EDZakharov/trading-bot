@@ -1,13 +1,8 @@
 /**
  * Represents a trading bot configured to operate with specific settings and strategies.
  */
-import {
-    Exchange,
-    IBotConfig,
-    IBuyOrdersStepsToGrid,
-    exchanges,
-} from '../@types/types';
-import { RsiDealType, StrategyType, TradeType } from '../events/events';
+import { Exchange, IBotConfig, exchanges } from '../@types/types';
+import { RsiDealType, TradeType } from '../events/events';
 import { ExchangeConnectionTracker } from '../events/exchangeEmitter';
 import { RsiDealTracker } from '../events/rsiEmitter';
 import { TradeTracker } from '../events/tradeEmitter';
@@ -153,19 +148,8 @@ export class Bot {
 
         rsi.on(RsiDealType.RSI_START_DEAL, (result: any) => {
             console.table(result);
-            trade.generateStrategy();
+            trade.startTrade();
         });
-
-        trade.on(
-            StrategyType.GENERATE_STRATEGY,
-            (strategy: IBuyOrdersStepsToGrid[] | []) => {
-                if (strategy.length !== 0) {
-                    trade.startTrade(strategy);
-                } else {
-                    console.error(`Strategy length for ${symbol} = 0`);
-                }
-            }
-        );
 
         const rsiOpt = this.rsiOptions;
 
@@ -185,11 +169,16 @@ export class Bot {
             });
         } else {
             trade.on(TradeType.STOP_TRADE, () => {
-                trade.generateStrategy();
+                trade.startTrade();
             });
 
-            trade.generateStrategy();
+            trade.startTrade();
         }
+
+        //test out
+        // setInterval(() => {
+        //     trade.stopTrade();
+        // }, 15000);
     }
 
     /**
