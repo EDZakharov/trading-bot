@@ -25,7 +25,7 @@ describe('Bot class', () => {
      */
     test('should initialize Bot successfully with valid parameters', async () => {
         const initialExchange = 'bybit';
-        const initialSymbols = ['BTCUSD', 'ETHUSD'];
+        const initialSymbols = ['BTCUSDT', 'ETHUSDT'];
         const initialBotConfig = {
             targetProfitPercent: 1,
             startOrderVolumeUSDT: 100,

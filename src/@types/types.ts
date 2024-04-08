@@ -2,6 +2,13 @@ import { Method } from 'axios';
 
 export type candles = [string, string, string, string, string, string, string];
 
+export interface OrderResponse {
+    result: {
+        orderId?: string;
+        orderLinkId?: string;
+    };
+}
+
 export type exchanges =
     | 'bybit'
     | 'binance'

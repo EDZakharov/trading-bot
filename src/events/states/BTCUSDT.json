@@ -1,1 +1,117 @@
-{"strategy":[{"step":0,"orderDeviation":0,"orderSecondaryPairVolume":0.00014448,"orderBasePairVolume":10,"orderPriceToStep":69214.92,"orderAveragePrice":69214.92,"orderTargetPrice":69907.0694,"orderTargetDeviation":1.00000029,"summarizedOrderSecondaryPairVolume":0.00014448,"summarizedOrderBasePairVolume":10},{"step":1,"orderDeviation":0.4,"orderSecondaryPairVolume":0.00014506,"orderBasePairVolume":10,"orderPriceToStep":68938.06032,"orderAveragePrice":69076.21286047,"orderTargetPrice":69766.97518907,"orderTargetDeviation":1.20240527,"summarizedOrderSecondaryPairVolume":0.00028954,"summarizedOrderBasePairVolume":20},{"step":2,"orderDeviation":1.036,"orderSecondaryPairVolume":0.0000146,"orderBasePairVolume":1,"orderPriceToStep":68497.8534288,"orderAveragePrice":69048.44917367,"orderTargetPrice":69738.93386541,"orderTargetDeviation":1.81185304,"summarizedOrderSecondaryPairVolume":0.00030414,"summarizedOrderBasePairVolume":21},{"step":3,"orderDeviation":2.04724,"orderSecondaryPairVolume":0.00000147,"orderBasePairVolume":0.1,"orderPriceToStep":67797.92447179,"orderAveragePrice":69042.43408479,"orderTargetPrice":69732.85862564,"orderTargetDeviation":2.85397255,"summarizedOrderSecondaryPairVolume":0.00030561,"summarizedOrderBasePairVolume":21.1},{"step":4,"orderDeviation":3.6551116,"orderSecondaryPairVolume":1.5e-7,"orderBasePairVolume":0.01,"orderPriceToStep":66685.03743015,"orderAveragePrice":69041.27759114,"orderTargetPrice":69731.69056705,"orderTargetDeviation":4.56872074,"summarizedOrderSecondaryPairVolume":0.00030576,"summarizedOrderBasePairVolume":21.11},{"step":5,"orderDeviation":6.21162744,"orderSecondaryPairVolume":2e-8,"orderBasePairVolume":0.001,"orderPriceToStep":64915.54703394,"orderAveragePrice":69041.00774154,"orderTargetPrice":69731.41801896,"orderTargetDeviation":7.41867119,"summarizedOrderSecondaryPairVolume":0.00030578,"summarizedOrderBasePairVolume":21.111},{"step":6,"orderDeviation":10.27648764,"orderSecondaryPairVolume":0,"orderBasePairVolume":0.0001,"orderPriceToStep":62102.05730396,"orderAveragePrice":69041.00774154,"orderTargetPrice":69731.41801896,"orderTargetDeviation":12.28519802,"summarizedOrderSecondaryPairVolume":0.00030578,"summarizedOrderBasePairVolume":21.1111},{"step":7,"orderDeviation":16.73961534,"orderSecondaryPairVolume":0,"orderBasePairVolume":0.00001,"orderPriceToStep":57628.6086333,"orderAveragePrice":69041.00774154,"orderTargetPrice":69731.41801896,"orderTargetDeviation":21.00139093,"summarizedOrderSecondaryPairVolume":0.00030578,"summarizedOrderBasePairVolume":21.11111},{"step":8,"orderDeviation":27.01598839,"orderSecondaryPairVolume":0,"orderBasePairVolume":0.000001,"orderPriceToStep":50515.82524694,"orderAveragePrice":69041.00774154,"orderTargetPrice":69731.41801896,"orderTargetDeviation":38.0387585,"summarizedOrderSecondaryPairVolume":0.00030578,"summarizedOrderBasePairVolume":21.111111},{"step":9,"orderDeviation":43.35542154,"orderSecondaryPairVolume":0,"orderBasePairVolume":1e-7,"orderPriceToStep":39206.49966264,"orderAveragePrice":69041.00774154,"orderTargetPrice":69731.41801896,"orderTargetDeviation":77.85678043,"summarizedOrderSecondaryPairVolume":0.00030578,"summarizedOrderBasePairVolume":21.1111111},{"step":10,"orderDeviation":69.33512026,"orderSecondaryPairVolume":0,"orderBasePairVolume":1e-8,"orderPriceToStep":21224.67198359,"orderAveragePrice":69041.00774154,"orderTargetPrice":69731.41801896,"orderTargetDeviation":228.53943784,"summarizedOrderSecondaryPairVolume":0.00030578,"summarizedOrderBasePairVolume":21.11111111}]}
+{
+    "strategy": [
+        {
+            "step": 2,
+            "orderDeviation": 0.259,
+            "orderSecondaryPairVolume": 0.00001405,
+            "orderBasePairVolume": 1,
+            "orderPriceToStep": 71158.720335,
+            "orderAveragePrice": 71300.69838122,
+            "orderTargetPrice": 72013.70556503,
+            "orderTargetDeviation": 1.20151856,
+            "summarizedOrderSecondaryPairVolume": 0.00029453,
+            "summarizedOrderBasePairVolume": 21
+        },
+        {
+            "step": 3,
+            "orderDeviation": 0.51181,
+            "orderSecondaryPairVolume": 0.00000141,
+            "orderBasePairVolume": 0.1,
+            "orderPriceToStep": 70978.35683265,
+            "orderAveragePrice": 71299.16259159,
+            "orderTargetPrice": 72012.15441751,
+            "orderTargetDeviation": 1.45649693,
+            "summarizedOrderSecondaryPairVolume": 0.00029594,
+            "summarizedOrderBasePairVolume": 21.1
+        },
+        {
+            "step": 4,
+            "orderDeviation": 0.9137779,
+            "orderSecondaryPairVolume": 1.4e-7,
+            "orderBasePairVolume": 0.01,
+            "orderPriceToStep": 70691.57886391,
+            "orderAveragePrice": 71298.87529856,
+            "orderTargetPrice": 72011.86425155,
+            "orderTargetDeviation": 1.86766997,
+            "summarizedOrderSecondaryPairVolume": 0.00029608,
+            "summarizedOrderBasePairVolume": 21.11
+        },
+        {
+            "step": 5,
+            "orderDeviation": 1.55290686,
+            "orderSecondaryPairVolume": 1e-8,
+            "orderBasePairVolume": 0.001,
+            "orderPriceToStep": 70235.60189362,
+            "orderAveragePrice": 71298.83938808,
+            "orderTargetPrice": 72011.82798196,
+            "orderTargetDeviation": 2.52895404,
+            "summarizedOrderSecondaryPairVolume": 0.00029609,
+            "summarizedOrderBasePairVolume": 21.111
+        },
+        {
+            "step": 6,
+            "orderDeviation": 2.56912191,
+            "orderSecondaryPairVolume": 0,
+            "orderBasePairVolume": 0.0001,
+            "orderPriceToStep": 69510.59851086,
+            "orderAveragePrice": 71298.83938808,
+            "orderTargetPrice": 72011.82798196,
+            "orderTargetDeviation": 3.59834259,
+            "summarizedOrderSecondaryPairVolume": 0.00029609,
+            "summarizedOrderBasePairVolume": 21.1111
+        },
+        {
+            "step": 7,
+            "orderDeviation": 4.18490384,
+            "orderSecondaryPairVolume": 0,
+            "orderBasePairVolume": 0.00001,
+            "orderPriceToStep": 68357.84313227,
+            "orderAveragePrice": 71298.83938808,
+            "orderTargetPrice": 72011.82798196,
+            "orderTargetDeviation": 5.34537762,
+            "summarizedOrderSecondaryPairVolume": 0.00029609,
+            "summarizedOrderBasePairVolume": 21.11111
+        },
+        {
+            "step": 8,
+            "orderDeviation": 6.7539971,
+            "orderSecondaryPairVolume": 0,
+            "orderBasePairVolume": 0.000001,
+            "orderPriceToStep": 66524.9620803,
+            "orderAveragePrice": 71298.83938808,
+            "orderTargetPrice": 72011.82798196,
+            "orderTargetDeviation": 8.24783018,
+            "summarizedOrderSecondaryPairVolume": 0.00029609,
+            "summarizedOrderBasePairVolume": 21.111111
+        },
+        {
+            "step": 9,
+            "orderDeviation": 10.83885539,
+            "orderSecondaryPairVolume": 0,
+            "orderBasePairVolume": 1e-7,
+            "orderPriceToStep": 63610.68120768,
+            "orderAveragePrice": 71298.83938808,
+            "orderTargetPrice": 72011.82798196,
+            "orderTargetDeviation": 13.20713222,
+            "summarizedOrderSecondaryPairVolume": 0.00029609,
+            "summarizedOrderBasePairVolume": 21.1111111
+        },
+        {
+            "step": 10,
+            "orderDeviation": 17.33378006,
+            "orderSecondaryPairVolume": 0,
+            "orderBasePairVolume": 1e-8,
+            "orderPriceToStep": 58976.97462022,
+            "orderAveragePrice": 71298.83938808,
+            "orderTargetPrice": 72011.82798196,
+            "orderTargetDeviation": 22.10159718,
+            "summarizedOrderSecondaryPairVolume": 0.00029609,
+            "summarizedOrderBasePairVolume": 21.11111111
+        }
+    ],
+    "lastStep": 2,
+    "onTakeProfit": true,
+    "onInsurance": true,
+    "takeProfitOrderID": {},
+    "insuranceOrderID": {}
+}

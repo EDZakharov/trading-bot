@@ -1,41 +1,39 @@
 import { RestClientV5 } from 'bybit-api';
 import { EventEmitter } from 'events';
-import fs from 'fs';
 
 import type {
     IBotConfig,
     IBuyOrdersStepsToGrid,
+    OrderResponse,
     exchanges,
 } from '../@types/types';
 import { myBot } from '../router/routes';
 import { generateBotStrategy } from '../strategy/generateDCA';
 import { StrategyType, TradeType } from './events';
+import { OrderExecutionTracker } from './ordersEmitter';
+import { StateFileManager } from './states/stateManager';
 
-/**
- * Class representing a tracker for trades.
- * Inherits from EventEmitter.
- */
 export class TradeTracker extends EventEmitter {
-    private coin: string; // Name of the coin being tracked
-    private settings: IBotConfig; // Configuration settings for the bot
-    private currentPrice = 0; // Current price of the coin
-    private prevPrice = 0; // Previous price of the coin
-    private strategy: IBuyOrdersStepsToGrid[] = []; // Trading strategy for the coin
-    private step: number; // Step
-    private ping: NodeJS.Timeout | undefined; // Timer for updating the price
-    private client: RestClientV5 | any; // Exchange client
-    private exchange; // Selected exchange
-    private coinPricesCache: Map<string, number> = new Map<string, number>(); // Cache for coin prices
+    private coin: string;
+    private settings: IBotConfig;
+    private currentPrice = 0;
+    private prevPrice = 0;
+    private strategy: IBuyOrdersStepsToGrid[] = [];
+    private step: number;
+    private ping: NodeJS.Timeout | undefined;
+    private client: RestClientV5 | any;
+    private exchange;
+    private coinPricesCache: Map<string, number> = new Map<string, number>();
     private coinInfo: any;
     private minQty: any;
-    private stateFilePath: string;
+    private readonly Order: OrderExecutionTracker;
+    private onTakeProfit: boolean;
+    private takeProfitOrderID?: OrderResponse;
+    private onInsurance: boolean;
+    private insuranceOrderID?: OrderResponse;
+    private stateManager;
+    private state: any;
 
-    /**
-     * Creates an instance of TradeTracker.
-     * @param initialCoin The initial coin to be tracked
-     * @param initialExchange The initial exchange to connect to
-     * @param initialSettings The initial bot configuration settings
-     */
     constructor(
         initialCoin: string,
         initialExchange: exchanges,
@@ -44,75 +42,117 @@ export class TradeTracker extends EventEmitter {
         super();
         this.coin = initialCoin;
         this.settings = initialSettings;
-        this.stateFilePath = __dirname + '/states/' + this.coin + '.json';
         this.exchange = initialExchange;
         this.step = 0;
-        if (!fs.existsSync(this.stateFilePath)) {
-            fs.writeFileSync(this.stateFilePath, '{}');
-        }
-        this.loadState();
-        // Set up event listeners
-        this.on(TradeType.START_TRADE, () => {
-            console.log(this.coin);
-            console.table(this.strategy);
-            this.startPongPrice();
-        });
-
-        this.on(TradeType.STOP_TRADE, () => {
-            if (this.ping) {
-                clearInterval(this.ping);
-            }
-        });
-
-        this.on(TradeType.UPDATE_PRICE, () => {
-            let isBlue = true;
-            const firstInsurance = this.strategy[0];
-
-            if (
-                firstInsurance &&
-                +this.coinPricesCache.get(this.coin)! >=
-                    firstInsurance.orderTargetPrice
-            ) {
-                console.log('stop trade');
-
-                this.emit(TradeType.STOP_TRADE);
-            }
-
-            const nextInsurance = this.strategy[1];
-
-            if (
-                nextInsurance &&
-                +this.coinPricesCache.get(this.coin)! <=
-                    nextInsurance.orderPriceToStep
-            ) {
-                this.step = +nextInsurance.step;
-                this.strategy.shift();
-                this.saveState();
-                console.table(this.strategy);
-            }
-
-            if (+this.coinPricesCache.get(this.coin)! !== this.prevPrice) {
-                process.stdout.write('\x1b[1A\x1b[2K');
-                console.log(`Checking prices - \x1b[32m\u2B24\x1b[0m`);
-                isBlue = false;
-            }
-            this.prevPrice = +this.coinPricesCache.get(this.coin)!;
-        });
-
-        try {
-            if (myBot) {
-                this.client = myBot.getExchangeClient();
-            }
-        } catch (error) {
-            console.error(error);
-        }
+        this.onTakeProfit = false;
+        this.onInsurance = false;
+        this.stateManager = new StateFileManager(this.coin);
+        this.init();
+        this.Order = new OrderExecutionTracker(this.client, initialExchange);
     }
 
-    /**
-     * Generates a trading strategy based on the current price and bot configuration.
-     */
-    public async generateStrategy() {
+    private async setState() {
+        this.state = {
+            strategy: this.strategy,
+            lastStep: this.step,
+            onTakeProfit: this.onTakeProfit,
+            takeProfitOrderID: this.takeProfitOrderID,
+            onInsurance: this.onInsurance,
+            insuranceOrderID: this.insuranceOrderID,
+        };
+        await this.stateManager.saveState(this.state);
+    }
+
+    private setupListeners() {
+        this.on(TradeType.UPDATE_PRICE, async () => {
+            try {
+                const baseStep = this.strategy[0];
+                const insuranceStep = this.strategy[1];
+
+                // console.log(orders);
+
+                if (baseStep) {
+                    this.step = baseStep.step;
+                    if (!this.onTakeProfit) {
+                        const submittedOrder =
+                            await this.Order.placeTakeProfitOrder(
+                                this.coin,
+                                baseStep.summarizedOrderBasePairVolume,
+                                baseStep.orderTargetPrice
+                            );
+
+                        if (submittedOrder) {
+                            this.takeProfitOrderID = submittedOrder;
+                            this.onTakeProfit = true;
+                        }
+                        console.log(submittedOrder);
+                    }
+
+                    if (this.onTakeProfit && !this.onInsurance && baseStep) {
+                        const submittedInsurance =
+                            await this.Order.placeInsuranceOrder(
+                                this.coin,
+                                baseStep.summarizedOrderSecondaryPairVolume,
+                                baseStep.orderPriceToStep
+                            );
+
+                        if (submittedInsurance) {
+                            this.insuranceOrderID = submittedInsurance;
+                            this.onInsurance = true;
+                        }
+                        console.log(submittedInsurance);
+                    }
+                    await this.setState();
+                    const orders = await this.Order.getActiveOrders(this.coin);
+                }
+
+                //NEXT STEP
+                if (
+                    insuranceStep &&
+                    +this.coinPricesCache.get(this.coin)! <=
+                        insuranceStep.orderPriceToStep
+                ) {
+                    this.step = +insuranceStep.step;
+                    this.strategy.shift();
+                    //Add order emitter
+                    await this.setState();
+                    console.table(this.strategy);
+                }
+
+                //EXIT
+                if (
+                    baseStep &&
+                    +this.coinPricesCache.get(this.coin)! >=
+                        baseStep.orderTargetPrice
+                ) {
+                    console.log('stop trade');
+                    //Add order emitter
+                    //Checking order execution by ID
+                    //If execute -> stop trade
+                    //if not -> wait execution
+                    this.emit(TradeType.STOP_TRADE);
+                }
+
+                //LOGGING
+                if (+this.coinPricesCache.get(this.coin)! !== this.prevPrice) {
+                    // process.stdout.write('\x1b[1A\x1b[2K');
+                    // console.log(
+                    //     `Checking prices - \x1b[32m\u2B24\x1b[0m` +
+                    //         ' ' +
+                    //         +this.coinPricesCache.get(this.coin)!
+                    // );
+
+                    console.log(+this.coinPricesCache.get(this.coin)!);
+                }
+
+                this.prevPrice = +this.coinPricesCache.get(this.coin)!;
+            } catch (error) {}
+        });
+    }
+
+    private async generateStrategy() {
         await this.getCoinInfo();
+        // console.log(this.coinInfo);
         const initialPrice = await this.getCoinPrice(this.coin);
 
         const strategy = generateBotStrategy(
@@ -126,18 +166,13 @@ export class TradeTracker extends EventEmitter {
             this.strategy = [];
         } else {
             this.strategy = strategy;
-            this.saveState();
+            await this.stateManager.saveState(this.state);
         }
 
         this.emit(StrategyType.GENERATE_STRATEGY, this.strategy);
     }
 
-    /**
-     * Retrieves the current price of the coin from the exchange.
-     * @param symbol The symbol of the coin
-     * @returns The current price of the coin
-     */
-    public async getCoinPrice(symbol: string) {
+    private async getCoinPrice(symbol: string) {
         let price: any;
 
         try {
@@ -157,11 +192,6 @@ export class TradeTracker extends EventEmitter {
                         }
                     }
                     break;
-                // case 'binance':
-                // case 'okex':
-                // case 'bitmart':
-                // case 'bitget':
-                // case 'none':
             }
         } catch (error) {
             console.error('Error getting coin price:', error);
@@ -185,20 +215,12 @@ export class TradeTracker extends EventEmitter {
                         this.minQty = +this.coinInfo.lotSizeFilter.minOrderQty;
                     }
                     break;
-                // case 'binance':
-                // case 'okex':
-                // case 'bitmart':
-                // case 'bitget':
-                // case 'none':
             }
         } catch (error) {
             console.error('Error getting coin info:', error);
         }
     }
 
-    /**
-     * Starts updating the coin price periodically.
-     */
     private async startPongPrice() {
         console.log();
         this.ping = setInterval(async () => {
@@ -208,50 +230,33 @@ export class TradeTracker extends EventEmitter {
                 this.coinPricesCache.set(this.coin, newPrice);
                 this.emit(TradeType.UPDATE_PRICE);
             }
-        }, 300);
+        }, 200);
     }
 
-    /**
-     * Starts a trade with the provided strategy.
-     * @param strategy The trading strategy to be applied
-     */
     public async startTrade() {
         await this.generateStrategy();
-        this.emit(TradeType.START_TRADE);
+        console.log(this.coin);
+        console.table(this.strategy);
+        this.startPongPrice();
     }
 
-    /**
-     * Stops the trade.
-     */
     public async stopTrade() {
-        await this.saveState();
+        await this.stateManager.clearStateFile();
+        if (this.ping) {
+            clearInterval(this.ping);
+        }
         this.emit(TradeType.STOP_TRADE);
     }
 
-    private async saveState() {
+    private async init() {
         try {
-            const state = {
-                strategy: this.strategy,
-                // Другие данные, которые вы хотите сохранить
-            };
-            await fs.promises.writeFile(
-                this.stateFilePath,
-                JSON.stringify(state)
-            );
-        } catch (error) {
-            console.error('Error saving trade tracker state:', error);
-        }
-    }
-
-    private async loadState() {
-        try {
-            const data = await fs.promises.readFile(this.stateFilePath, 'utf8');
-            const state = JSON.parse(data);
-            if (state.strategy) {
-                this.strategy = state.strategy;
+            if (myBot) {
+                this.client = myBot.getExchangeClient();
             }
         } catch (error) {
-            console.error('Error loading trade tracker state:', error);
+            console.error(error);
         }
+        this.state = await this.stateManager.loadStateFile();
+        this.setupListeners();
     }
 }
