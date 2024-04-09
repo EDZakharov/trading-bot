@@ -4,12 +4,12 @@ import { EventEmitter } from 'events';
 import type {
     IBotConfig,
     IBuyOrdersStepsToGrid,
-    OrderResponse,
+    OrderId,
     exchanges,
 } from '../@types/types';
 import { myBot } from '../router/routes';
 import { generateBotStrategy } from '../strategy/generateDCA';
-import { StrategyType, TradeType } from './events';
+import { OrderType, StrategyType, TradeType } from './events';
 import { OrderExecutionTracker } from './ordersEmitter';
 import { StateFileManager } from './states/stateManager';
 
@@ -28,9 +28,10 @@ export class TradeTracker extends EventEmitter {
     private minQty: any;
     private readonly Order: OrderExecutionTracker;
     private onTakeProfit: boolean;
-    private takeProfitOrderID?: OrderResponse;
+    private takeProfitOrderID?: OrderId;
+    private baseOrderID?: OrderId;
     private onInsurance: boolean;
-    private insuranceOrderID?: OrderResponse;
+    private insuranceOrderID?: OrderId;
     private stateManager;
     private state: any;
 
@@ -48,62 +49,43 @@ export class TradeTracker extends EventEmitter {
         this.onInsurance = false;
         this.stateManager = new StateFileManager(this.coin);
         this.init();
-        this.Order = new OrderExecutionTracker(this.client, initialExchange);
-    }
+        this.Order = new OrderExecutionTracker(
+            this.client,
+            this.exchange,
+            this.coin
+        );
 
-    private async setState() {
-        this.state = {
-            strategy: this.strategy,
-            lastStep: this.step,
-            onTakeProfit: this.onTakeProfit,
-            takeProfitOrderID: this.takeProfitOrderID,
-            onInsurance: this.onInsurance,
-            insuranceOrderID: this.insuranceOrderID,
-        };
-        await this.stateManager.saveState(this.state);
-    }
-
-    private setupListeners() {
         this.on(TradeType.UPDATE_PRICE, async () => {
             try {
                 const baseStep = this.strategy[0];
                 const insuranceStep = this.strategy[1];
-
-                // console.log(orders);
-
                 if (baseStep) {
                     this.step = baseStep.step;
                     if (!this.onTakeProfit) {
-                        const submittedOrder =
-                            await this.Order.placeTakeProfitOrder(
-                                this.coin,
-                                baseStep.summarizedOrderBasePairVolume,
-                                baseStep.orderTargetPrice
-                            );
-
-                        if (submittedOrder) {
-                            this.takeProfitOrderID = submittedOrder;
-                            this.onTakeProfit = true;
-                        }
-                        console.log(submittedOrder);
+                        this.onTakeProfit = true;
+                        //CHECK PLACING BASE ORDER
+                        this.Order.emit(OrderType.PLACE_TP_ORDER, {
+                            qty: baseStep.summarizedOrderBasePairVolume,
+                            price: baseStep.orderTargetPrice,
+                        });
                     }
 
-                    if (this.onTakeProfit && !this.onInsurance && baseStep) {
-                        const submittedInsurance =
-                            await this.Order.placeInsuranceOrder(
-                                this.coin,
-                                baseStep.summarizedOrderSecondaryPairVolume,
-                                baseStep.orderPriceToStep
-                            );
+                    // if (this.onTakeProfit && !this.onInsurance && baseStep) {
+                    //     const submittedInsurance =
+                    //         await this.Order.placeInsuranceOrder(
+                    //             this.coin,
+                    //             baseStep.summarizedOrderSecondaryPairVolume,
+                    //             baseStep.orderPriceToStep
+                    //         );
 
-                        if (submittedInsurance) {
-                            this.insuranceOrderID = submittedInsurance;
-                            this.onInsurance = true;
-                        }
-                        console.log(submittedInsurance);
-                    }
-                    await this.setState();
-                    const orders = await this.Order.getActiveOrders(this.coin);
+                    //     if (submittedInsurance) {
+                    //         this.insuranceOrderID = submittedInsurance;
+                    //         this.onInsurance = true;
+                    //     }
+                    //     console.log(submittedInsurance);
+                    // }
+                    // await this.setState();
+                    // const orders = await this.Order.getActiveOrders(this.coin);
                 }
 
                 //NEXT STEP
@@ -114,8 +96,7 @@ export class TradeTracker extends EventEmitter {
                 ) {
                     this.step = +insuranceStep.step;
                     this.strategy.shift();
-                    //Add order emitter
-                    await this.setState();
+                    // await this.setState();
                     console.table(this.strategy);
                 }
 
@@ -126,35 +107,45 @@ export class TradeTracker extends EventEmitter {
                         baseStep.orderTargetPrice
                 ) {
                     console.log('stop trade');
-                    //Add order emitter
-                    //Checking order execution by ID
-                    //If execute -> stop trade
-                    //if not -> wait execution
                     this.emit(TradeType.STOP_TRADE);
                 }
-
-                //LOGGING
-                if (+this.coinPricesCache.get(this.coin)! !== this.prevPrice) {
-                    // process.stdout.write('\x1b[1A\x1b[2K');
-                    // console.log(
-                    //     `Checking prices - \x1b[32m\u2B24\x1b[0m` +
-                    //         ' ' +
-                    //         +this.coinPricesCache.get(this.coin)!
-                    // );
-
-                    console.log(+this.coinPricesCache.get(this.coin)!);
-                }
-
-                this.prevPrice = +this.coinPricesCache.get(this.coin)!;
             } catch (error) {}
         });
+
+        this.Order.on(
+            OrderType.TP_ORDER_SUCCESSFULLY_PLACED,
+            async (orderId) => {
+                this.takeProfitOrderID = orderId;
+                await this.setState();
+            }
+        );
+
+        this.Order.on(
+            OrderType.BASE_ORDER_SUCCESSFULLY_PLACED,
+            async (orderId) => {
+                this.baseOrderID = orderId;
+                await this.setState();
+            }
+        );
+    }
+
+    private async setState() {
+        this.state = {
+            strategy: this.strategy,
+            lastStep: this.step,
+            onBaseOrderID: this.baseOrderID,
+            // onTakeProfit: this.onTakeProfit,
+            // takeProfitOrderID: this.takeProfitOrderID,
+            // onInsurance: this.onInsurance,
+            // insuranceOrderID: this.insuranceOrderID,
+        };
+        await this.stateManager.saveState(this.state);
     }
 
     private async generateStrategy() {
-        await this.getCoinInfo();
-        // console.log(this.coinInfo);
-        const initialPrice = await this.getCoinPrice(this.coin);
-
+        this.coinInfo = await this.Order.getCoinInfo();
+        this.minQty = +this.coinInfo.lotSizeFilter.minOrderQty;
+        const initialPrice = await this.Order.getCoinPrice(this.coin);
         const strategy = generateBotStrategy(
             this.coin,
             this.settings,
@@ -172,59 +163,10 @@ export class TradeTracker extends EventEmitter {
         this.emit(StrategyType.GENERATE_STRATEGY, this.strategy);
     }
 
-    private async getCoinPrice(symbol: string) {
-        let price: any;
-
-        try {
-            const connectedExchangeClient = await this.client;
-            switch (this.exchange) {
-                case 'bybit':
-                    if (connectedExchangeClient instanceof RestClientV5) {
-                        const tickers =
-                            await connectedExchangeClient.getTickers({
-                                category: 'spot',
-                                symbol,
-                            });
-
-                        price = tickers?.result.list[0]?.lastPrice;
-                        if (price) {
-                            this.coinPricesCache.set(symbol, price);
-                        }
-                    }
-                    break;
-            }
-        } catch (error) {
-            console.error('Error getting coin price:', error);
-        }
-        return price;
-    }
-
-    private async getCoinInfo() {
-        try {
-            const connectedExchangeClient = await this.client;
-            switch (this.exchange) {
-                case 'bybit':
-                    if (connectedExchangeClient instanceof RestClientV5) {
-                        const instrumentsInfo =
-                            await connectedExchangeClient.getInstrumentsInfo({
-                                category: 'spot',
-                                symbol: this.coin,
-                            });
-
-                        this.coinInfo = instrumentsInfo.result.list[0];
-                        this.minQty = +this.coinInfo.lotSizeFilter.minOrderQty;
-                    }
-                    break;
-            }
-        } catch (error) {
-            console.error('Error getting coin info:', error);
-        }
-    }
-
     private async startPongPrice() {
         console.log();
         this.ping = setInterval(async () => {
-            const newPrice = await this.getCoinPrice(this.coin);
+            const newPrice = await this.Order.getCoinPrice(this.coin);
             if (newPrice !== this.currentPrice) {
                 this.currentPrice = newPrice;
                 this.coinPricesCache.set(this.coin, newPrice);
@@ -237,7 +179,12 @@ export class TradeTracker extends EventEmitter {
         await this.generateStrategy();
         console.log(this.coin);
         console.table(this.strategy);
-        this.startPongPrice();
+        const baseStep = this.strategy[0];
+        if (baseStep) {
+            //CHECK WALLET BALANCE
+            await this.Order.placeBaseOrder(baseStep.orderBasePairVolume);
+            await this.startPongPrice();
+        }
     }
 
     public async stopTrade() {
@@ -257,6 +204,5 @@ export class TradeTracker extends EventEmitter {
             console.error(error);
         }
         this.state = await this.stateManager.loadStateFile();
-        this.setupListeners();
     }
 }

@@ -9,6 +9,10 @@ export interface OrderResponse {
     };
 }
 
+export type OrderId = {
+    orderId?: string;
+};
+
 export type exchanges =
     | 'bybit'
     | 'binance'

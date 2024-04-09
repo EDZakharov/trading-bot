@@ -25,3 +25,13 @@ export enum ExchangeConnectionType {
     CONNECTION_ERROR = 'connectionError',
     GET_EXCHANGE_CLIENT = 'getExchangeClient',
 }
+
+export enum OrderType {
+    PLACE_TP_ORDER = 'placeTakeProfitOrder',
+    PLACE_INSURANCE_ORDER = 'placeInsuranceOrder',
+    DELETE_TAKE_PROFIT_ORDER = 'deleteTakeProfitOrder',
+    TP_ORDER_SUCCESSFULLY_PLACED = 'tpOrderSuccessfullyPlaced',
+    TP_ORDER_PLACING_FAILED = 'tpOrderPlacingFailed',
+    BASE_ORDER_SUCCESSFULLY_PLACED = 'baseOrderSuccessfullyPlaced',
+    BASE_ORDER_PLACING_FAILED = 'baseOrderPlacingFailed',
+}
