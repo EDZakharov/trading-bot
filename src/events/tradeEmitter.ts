@@ -144,7 +144,8 @@ export class TradeTracker extends EventEmitter {
 
     private async generateStrategy() {
         this.coinInfo = await this.Order.getCoinInfo();
-        this.minQty = +this.coinInfo.lotSizeFilter.minOrderQty;
+
+        this.minQty = +this.coinInfo?.lotSizeFilter?.minOrderQty;
         const initialPrice = await this.Order.getCoinPrice(this.coin);
         const strategy = generateBotStrategy(
             this.coin,

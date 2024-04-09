@@ -91,7 +91,7 @@ describe('Bot class', () => {
      */
     test('should throw BotInitializationError with null bot config', () => {
         const initialExchange = 'bybit';
-        const initialSymbols: string[] = ['BTCUSD'];
+        const initialSymbols: string[] = ['BTCUSDT'];
         const initialBotConfig = null;
         const initialRsiOptions = null;
 
@@ -111,7 +111,7 @@ describe('Bot class', () => {
      */
     test('should throw BotInitializationError with null RSI options', () => {
         const initialExchange = 'bybit';
-        const initialSymbols: string[] = ['BTCUSD'];
+        const initialSymbols: string[] = ['BTCUSDT'];
         const initialBotConfig = {
             targetProfitPercent: 1,
             startOrderVolumeUSDT: 100,
@@ -139,7 +139,7 @@ describe('Bot class', () => {
      */
     test('should throw BotInitializationError with 0 RSI options', () => {
         const initialExchange = 'bybit';
-        const initialSymbols: string[] = ['BTCUSD'];
+        const initialSymbols: string[] = ['BTCUSDT'];
         const initialBotConfig = {
             targetProfitPercent: 1,
             startOrderVolumeUSDT: 100,
@@ -167,7 +167,7 @@ describe('Bot class', () => {
      */
     test('should start and stop Bot successfully', async () => {
         const initialExchange = 'bybit';
-        const initialSymbols = ['BTCUSD'];
+        const initialSymbols = ['BTCUSDT'];
         const initialBotConfig = {
             targetProfitPercent: 1,
             startOrderVolumeUSDT: 100,
