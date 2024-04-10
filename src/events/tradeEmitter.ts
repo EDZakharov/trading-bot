@@ -61,13 +61,14 @@ export class TradeTracker extends EventEmitter {
                 const insuranceStep = this.strategy[1];
                 if (baseStep) {
                     this.step = baseStep.step;
-                    if (!this.onTakeProfit) {
+
+                    if (this.baseOrderID && !this.onTakeProfit) {
                         this.onTakeProfit = true;
+                        await this.Order.placeTakeProfitOrder(
+                            baseStep.summarizedOrderBasePairVolume,
+                            baseStep.orderTargetPrice
+                        );
                         //CHECK PLACING BASE ORDER
-                        this.Order.emit(OrderType.PLACE_TP_ORDER, {
-                            qty: baseStep.summarizedOrderBasePairVolume,
-                            price: baseStep.orderTargetPrice,
-                        });
                     }
 
                     // if (this.onTakeProfit && !this.onInsurance && baseStep) {
@@ -96,7 +97,7 @@ export class TradeTracker extends EventEmitter {
                 ) {
                     this.step = +insuranceStep.step;
                     this.strategy.shift();
-                    // await this.setState();
+
                     console.table(this.strategy);
                 }
 
@@ -109,6 +110,7 @@ export class TradeTracker extends EventEmitter {
                     console.log('stop trade');
                     this.emit(TradeType.STOP_TRADE);
                 }
+                await this.setState();
             } catch (error) {}
         });
 
@@ -119,6 +121,11 @@ export class TradeTracker extends EventEmitter {
                 await this.setState();
             }
         );
+
+        this.Order.on(OrderType.TP_ORDER_PLACING_FAILED, async () => {
+            this.onTakeProfit = false;
+            await this.setState();
+        });
 
         this.Order.on(
             OrderType.BASE_ORDER_SUCCESSFULLY_PLACED,
@@ -132,9 +139,10 @@ export class TradeTracker extends EventEmitter {
     private async setState() {
         this.state = {
             strategy: this.strategy,
-            lastStep: this.step,
-            onBaseOrderID: this.baseOrderID,
-            // onTakeProfit: this.onTakeProfit,
+            currentPrice: this.currentPrice,
+            currentStep: this.step,
+            baseOrderID: this.baseOrderID,
+            onTakeProfit: this.onTakeProfit,
             // takeProfitOrderID: this.takeProfitOrderID,
             // onInsurance: this.onInsurance,
             // insuranceOrderID: this.insuranceOrderID,
@@ -144,7 +152,6 @@ export class TradeTracker extends EventEmitter {
 
     private async generateStrategy() {
         this.coinInfo = await this.Order.getCoinInfo();
-
         this.minQty = +this.coinInfo?.lotSizeFilter?.minOrderQty;
         const initialPrice = await this.Order.getCoinPrice(this.coin);
         const strategy = generateBotStrategy(
@@ -158,6 +165,7 @@ export class TradeTracker extends EventEmitter {
             this.strategy = [];
         } else {
             this.strategy = strategy;
+
             await this.stateManager.saveState(this.state);
         }
 
@@ -173,7 +181,7 @@ export class TradeTracker extends EventEmitter {
                 this.coinPricesCache.set(this.coin, newPrice);
                 this.emit(TradeType.UPDATE_PRICE);
             }
-        }, 200);
+        }, 400);
     }
 
     public async startTrade() {
@@ -183,8 +191,20 @@ export class TradeTracker extends EventEmitter {
         const baseStep = this.strategy[0];
         if (baseStep) {
             //CHECK WALLET BALANCE
-            await this.Order.placeBaseOrder(baseStep.orderBasePairVolume);
-            await this.startPongPrice();
+            const balance = await this.Order.getUSDTBalance();
+            if (balance >= baseStep.orderBasePairVolume) {
+                if (!this.baseOrderID) {
+                    await this.Order.placeBaseOrder(
+                        baseStep.orderBasePairVolume
+                    );
+                }
+                await this.startPongPrice();
+            } else {
+                console.log(balance);
+                console.log(baseStep.orderBasePairVolume);
+
+                throw new Error('Insufficient balance');
+            }
         }
     }
 

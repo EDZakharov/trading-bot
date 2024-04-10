@@ -41,19 +41,12 @@ export class OrderExecutionTracker extends EventEmitter {
         // this.prevPrice = +this.coinPricesCache.get(this.coin)!;
         // }
 
-        this.on(
-            OrderType.PLACE_TP_ORDER,
-            async (data: { qty: string; price: string }) => {
-                await this.placeTakeProfitOrder(data.qty, data.price);
-            }
-        );
-
         this.on(OrderType.PLACE_INSURANCE_ORDER, () => {});
 
         this.on(OrderType.DELETE_TAKE_PROFIT_ORDER, () => {});
     }
 
-    private async getWalletBalance(symbol: string) {
+    public async getCoinBalance(symbol: string) {
         const exchangeCli = await this.exchangeClient;
         switch (this.exchange) {
             case 'bybit':
@@ -67,7 +60,52 @@ export class OrderExecutionTracker extends EventEmitter {
                         if (balance.result.balance?.walletBalance) {
                             this.walletBalance =
                                 balance.result.balance.walletBalance;
+                            return this.walletBalance;
                         }
+                        break;
+                    } catch (error) {
+                        console.log(error);
+                    }
+                }
+                break;
+            case Exchange.Binance:
+                // Logic for executing the order on Binance
+                break;
+            case Exchange.Okex:
+                // Logic for executing the order on Okex
+                break;
+            case Exchange.Bitmart:
+                // Logic for executing the order on Bitmart
+                break;
+            case Exchange.Bitget:
+                // Logic for executing the order on Bitget
+                break;
+            case Exchange.None:
+                // Handling the case when no exchange is specified
+                break;
+            default:
+                // Handling other possible values or error scenarios
+                break;
+        }
+        return;
+    }
+
+    public async getUSDTBalance() {
+        const exchangeCli = await this.exchangeClient;
+        switch (this.exchange) {
+            case 'bybit':
+                if (exchangeCli instanceof RestClientV5) {
+                    try {
+                        const balance = await exchangeCli.getCoinBalance({
+                            coin: 'USDT',
+                            accountType: 'UNIFIED',
+                        });
+                        if (balance.result.balance?.walletBalance) {
+                            this.walletBalance =
+                                balance.result.balance.walletBalance;
+                            return this.walletBalance;
+                        }
+                        break;
                     } catch (error) {
                         console.log(error);
                     }
@@ -104,10 +142,17 @@ export class OrderExecutionTracker extends EventEmitter {
         switch (this.exchange) {
             case 'bybit':
                 if (exchangeCli instanceof RestClientV5) {
-                    await this.getWalletBalance(this.coin);
-                    console.log(this.walletBalance);
-                    console.log(this.coinInfo);
                     try {
+                        await this.getCoinBalance(this.coin);
+                        if (this.walletBalance < qty) {
+                            console.log(this.walletBalance);
+                            this.emit(
+                                OrderType.TP_ORDER_PLACING_FAILED,
+                                'Insufficient balance'
+                            );
+                            break;
+                        }
+
                         const order = await exchangeCli.submitOrder({
                             category: 'spot',
                             orderType: 'Limit',
@@ -116,7 +161,9 @@ export class OrderExecutionTracker extends EventEmitter {
                             qty: qty.toString(),
                             price: price.toString(),
                         });
+
                         console.log(order);
+
                         if (order.result.orderId) {
                             this.emit(
                                 OrderType.TP_ORDER_SUCCESSFULLY_PLACED,
@@ -127,6 +174,7 @@ export class OrderExecutionTracker extends EventEmitter {
                         }
                     } catch (error) {
                         console.log(error);
+                        this.emit(OrderType.TP_ORDER_PLACING_FAILED);
                     }
                 }
                 break;
@@ -157,8 +205,7 @@ export class OrderExecutionTracker extends EventEmitter {
         switch (this.exchange) {
             case 'bybit':
                 if (exchangeCli instanceof RestClientV5) {
-                    await this.getWalletBalance(this.coin);
-                    console.log(this.walletBalance);
+                    await this.getCoinBalance(this.coin);
 
                     try {
                         const order = await exchangeCli.submitOrder({
@@ -180,6 +227,7 @@ export class OrderExecutionTracker extends EventEmitter {
                         }
                     } catch (error) {
                         console.log(error);
+                        this.emit(OrderType.BASE_ORDER_PLACING_FAILED);
                     }
                 }
                 break;

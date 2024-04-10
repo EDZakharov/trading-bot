@@ -142,37 +142,41 @@ export class Bot {
         rsi: RsiDealTracker,
         symbol: string
     ) {
-        rsi.on('error', (error: Error) => {
-            console.error(`Error in RsiDealTracker for ${symbol}:`, error);
-        });
+        try {
+            rsi.on('error', (error: Error) => {
+                console.error(`Error in RsiDealTracker for ${symbol}:`, error);
+            });
 
-        rsi.on(RsiDealType.RSI_START_DEAL, (result: any) => {
-            console.table(result);
-            trade.startTrade();
-        });
+            rsi.on(RsiDealType.RSI_START_DEAL, (result: any) => {
+                console.table(result);
+                trade.startTrade();
+            });
 
-        const rsiOpt = this.rsiOptions;
+            const rsiOpt = this.rsiOptions;
 
-        if (rsiOpt) {
-            trade.on(TradeType.STOP_TRADE, () => {
+            if (rsiOpt) {
+                trade.on(TradeType.STOP_TRADE, () => {
+                    rsi.startRsiTracking({
+                        symbol,
+                        timeInterval: rsiOpt.timeInterval,
+                        candlesCount: rsiOpt.candlesCount,
+                    });
+                });
+
                 rsi.startRsiTracking({
                     symbol,
                     timeInterval: rsiOpt.timeInterval,
                     candlesCount: rsiOpt.candlesCount,
                 });
-            });
+            } else {
+                trade.on(TradeType.STOP_TRADE, () => {
+                    trade.startTrade();
+                });
 
-            rsi.startRsiTracking({
-                symbol,
-                timeInterval: rsiOpt.timeInterval,
-                candlesCount: rsiOpt.candlesCount,
-            });
-        } else {
-            trade.on(TradeType.STOP_TRADE, () => {
                 trade.startTrade();
-            });
-
-            trade.startTrade();
+            }
+        } catch (error) {
+            console.log(error);
         }
 
         //test out
