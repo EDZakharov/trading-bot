@@ -11,6 +11,7 @@ export enum PriceType {
 export enum TradeType {
     START_TRADE = 'startTrade',
     STOP_TRADE = 'stopTrade',
+    END_OF_LOOP = 'endOfLoop',
     UPDATE_PRICE = 'updatePrice',
     UPDATE_STEP = 'updateStep',
 }
@@ -34,4 +35,6 @@ export enum OrderType {
     TP_ORDER_PLACING_FAILED = 'tpOrderPlacingFailed',
     BASE_ORDER_SUCCESSFULLY_PLACED = 'baseOrderSuccessfullyPlaced',
     BASE_ORDER_PLACING_FAILED = 'baseOrderPlacingFailed',
+    INSURANCE_ORDER_SUCCESSFULLY_PLACED = 'insuranceOrderSuccessfullyPlaced',
+    INSURANCE_ORDER_PLACING_FAILED = 'insuranceOrderPlacingFailed',
 }

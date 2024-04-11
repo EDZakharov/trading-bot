@@ -1,6 +1,7 @@
 import { RestClientV5 } from 'bybit-api';
 import { EventEmitter } from 'events';
-import { Exchange, OrderId, OrderResponse, exchanges } from '../@types/types';
+import { Exchange, OrderId, exchanges } from '../@types/types';
+import { roundToPrecision } from '../utils/roundToPrecision';
 import { OrderType } from './events';
 
 /**
@@ -14,6 +15,7 @@ export class OrderExecutionTracker extends EventEmitter {
     private feeTaker: any;
     private usdtPrecision: any;
     private coinPrecision: any;
+    private pricePrecision: any;
     private walletBalance: any;
     private coinInfo: any;
     private coinPricesCache: Map<string, number> = new Map<string, number>();
@@ -29,17 +31,6 @@ export class OrderExecutionTracker extends EventEmitter {
         this.exchangeClient = initialExchangeClient;
         this.exchange = initialExchange;
         this.coin = initialCoin;
-
-        // if (+this.coinPricesCache.get(this.coin)! !== this.prevPrice) {
-        // process.stdout.write('\x1b[1A\x1b[2K');
-        // console.log(
-        //     `Checking prices - \x1b[32m\u2B24\x1b[0m` +
-        //         ' ' +
-        //         +this.coinPricesCache.get(this.coin)!
-        // );
-        // console.log(+this.coinPricesCache.get(this.coin)!);
-        // this.prevPrice = +this.coinPricesCache.get(this.coin)!;
-        // }
 
         this.on(OrderType.PLACE_INSURANCE_ORDER, () => {});
 
@@ -133,19 +124,17 @@ export class OrderExecutionTracker extends EventEmitter {
         return;
     }
 
-    public async placeTakeProfitOrder(
-        qty: string | number,
-        price: string | number
-    ) {
+    async placeTakeProfitOrder(qty: string | number, price: string | number) {
         const exchangeCli = await this.exchangeClient;
-
         switch (this.exchange) {
             case 'bybit':
                 if (exchangeCli instanceof RestClientV5) {
                     try {
                         await this.getCoinBalance(this.coin);
-                        if (this.walletBalance < qty) {
+                        if (+this.walletBalance < +qty) {
                             console.log(this.walletBalance);
+                            console.log(qty);
+
                             this.emit(
                                 OrderType.TP_ORDER_PLACING_FAILED,
                                 'Insufficient balance'
@@ -153,15 +142,30 @@ export class OrderExecutionTracker extends EventEmitter {
                             break;
                         }
 
+                        await this.getExchangeFee();
+
+                        const qtyToPrecision = roundToPrecision(
+                            +qty,
+                            this.usdtPrecision
+                        );
+
+                        const priceWithFee = (await this.calculateOrderFees(
+                            +price
+                        )) as number;
+
+                        console.log(priceWithFee);
+
                         const order = await exchangeCli.submitOrder({
                             category: 'spot',
                             orderType: 'Limit',
                             side: 'Sell',
                             symbol: this.coin,
-                            qty: qty.toString(),
-                            price: price.toString(),
+                            qty: qtyToPrecision.toString(),
+                            price: roundToPrecision(
+                                priceWithFee,
+                                this.pricePrecision
+                            ).toString(),
                         });
-
                         console.log(order);
 
                         if (order.result.orderId) {
@@ -200,12 +204,16 @@ export class OrderExecutionTracker extends EventEmitter {
         return;
     }
 
-    public async placeBaseOrder(qty: string | number) {
+    async placeBaseOrder(qty: string | number) {
         const exchangeCli = await this.exchangeClient;
         switch (this.exchange) {
             case 'bybit':
                 if (exchangeCli instanceof RestClientV5) {
-                    await this.getCoinBalance(this.coin);
+                    await this.getExchangeFee();
+
+                    const qtyWithFee = (await this.calculateOrderFees(
+                        +qty
+                    )) as number;
 
                     try {
                         const order = await exchangeCli.submitOrder({
@@ -213,9 +221,8 @@ export class OrderExecutionTracker extends EventEmitter {
                             orderType: 'Market',
                             side: 'Buy',
                             symbol: this.coin,
-                            qty: qty.toString(),
+                            qty: qtyWithFee.toString(),
                         });
-                        console.log(order);
 
                         if (order.result.orderId) {
                             this.emit(
@@ -252,8 +259,87 @@ export class OrderExecutionTracker extends EventEmitter {
         }
         return;
     }
+    async placeInsuranceOrder(qty: string | number, price: string | number) {
+        const exchangeCli = await this.exchangeClient;
 
-    public async deleteOrderById() {
+        switch (this.exchange) {
+            case 'bybit':
+                if (exchangeCli instanceof RestClientV5) {
+                    try {
+                        await this.getCoinBalance(this.coin);
+                        if (+this.walletBalance < +qty) {
+                            console.log(this.walletBalance);
+                            console.log(qty);
+
+                            this.emit(
+                                OrderType.INSURANCE_ORDER_PLACING_FAILED,
+                                'Insufficient balance'
+                            );
+                            break;
+                        }
+
+                        await this.getExchangeFee();
+
+                        const qtyToPrecision = roundToPrecision(
+                            +qty,
+                            this.usdtPrecision
+                        );
+
+                        const priceWithFee = (await this.calculateOrderFees(
+                            +price
+                        )) as number;
+
+                        console.log(priceWithFee);
+
+                        const order = await exchangeCli.submitOrder({
+                            category: 'spot',
+                            orderType: 'Limit',
+                            side: 'Buy',
+                            symbol: this.coin,
+                            qty: qtyToPrecision.toString(),
+                            price: roundToPrecision(
+                                priceWithFee,
+                                this.pricePrecision
+                            ).toString(),
+                        });
+                        console.log(order);
+                        if (order.result.orderId) {
+                            this.emit(
+                                OrderType.INSURANCE_ORDER_SUCCESSFULLY_PLACED,
+                                order.result.orderId as unknown as OrderId
+                            );
+                        } else {
+                            this.emit(OrderType.INSURANCE_ORDER_PLACING_FAILED);
+                        }
+                    } catch (error) {
+                        console.log(error);
+                        this.emit(OrderType.INSURANCE_ORDER_PLACING_FAILED);
+                    }
+                }
+                break;
+            case Exchange.Binance:
+                // Logic for executing the order on Binance
+                break;
+            case Exchange.Okex:
+                // Logic for executing the order on Okex
+                break;
+            case Exchange.Bitmart:
+                // Logic for executing the order on Bitmart
+                break;
+            case Exchange.Bitget:
+                // Logic for executing the order on Bitget
+                break;
+            case Exchange.None:
+                // Handling the case when no exchange is specified
+                break;
+            default:
+                // Handling other possible values or error scenarios
+                break;
+        }
+        return;
+    }
+
+    async deleteOrderById() {
         switch (this.exchange) {
             case Exchange.Bybit:
                 if (this.exchangeClient instanceof RestClientV5) {
@@ -280,53 +366,7 @@ export class OrderExecutionTracker extends EventEmitter {
         }
     }
 
-    public async placeInsuranceOrder(
-        symbol: string,
-        qty: string | number,
-        price: string | number
-    ) {
-        const exchangeCli = await this.exchangeClient;
-        switch (this.exchange) {
-            case 'bybit':
-                if (exchangeCli instanceof RestClientV5) {
-                    try {
-                        const order = await exchangeCli.submitOrder({
-                            category: 'spot',
-                            orderType: 'Limit',
-                            side: 'Buy',
-                            symbol,
-                            qty: qty.toString(),
-                            price: price.toString(),
-                        });
-                        return order.result as unknown as OrderResponse;
-                    } catch (error) {
-                        console.log(error);
-                    }
-                }
-                break;
-            case Exchange.Binance:
-                // Logic for executing the order on Binance
-                break;
-            case Exchange.Okex:
-                // Logic for executing the order on Okex
-                break;
-            case Exchange.Bitmart:
-                // Logic for executing the order on Bitmart
-                break;
-            case Exchange.Bitget:
-                // Logic for executing the order on Bitget
-                break;
-            case Exchange.None:
-                // Handling the case when no exchange is specified
-                break;
-            default:
-                // Handling other possible values or error scenarios
-                break;
-        }
-        return;
-    }
-
-    public async getActiveOrders(symbol: string) {
+    async getActiveOrders(symbol: string) {
         const exchangeCli = await this.exchangeClient;
         switch (this.exchange) {
             case 'bybit':
@@ -364,7 +404,7 @@ export class OrderExecutionTracker extends EventEmitter {
         return;
     }
 
-    public async getCoinPrice(symbol: string) {
+    async getCoinPrice(symbol: string) {
         let price: any;
 
         try {
@@ -392,20 +432,34 @@ export class OrderExecutionTracker extends EventEmitter {
         return price;
     }
 
-    public async getCoinInfo() {
+    async getCoinInfo() {
         try {
             const connectedExchangeClient = await this.exchangeClient;
             switch (this.exchange) {
                 case 'bybit':
                     if (connectedExchangeClient instanceof RestClientV5) {
-                        const instrumentsInfo =
-                            await connectedExchangeClient.getInstrumentsInfo({
-                                category: 'spot',
-                                symbol: this.coin,
-                            });
+                        try {
+                            const instrumentsInfo =
+                                await connectedExchangeClient.getInstrumentsInfo(
+                                    {
+                                        category: 'spot',
+                                        symbol: this.coin,
+                                    }
+                                );
 
-                        this.coinInfo = instrumentsInfo.result.list[0];
-                        return this.coinInfo;
+                            this.usdtPrecision =
+                                instrumentsInfo.result.list[0]?.lotSizeFilter.basePrecision;
+                            this.coinPrecision =
+                                instrumentsInfo.result.list[0]?.lotSizeFilter.quotePrecision;
+                            this.pricePrecision =
+                                instrumentsInfo.result.list[0]?.priceFilter.tickSize;
+                            this.coinInfo = instrumentsInfo.result.list[0];
+
+                            return this.coinInfo;
+                        } catch (error) {
+                            console.log(error);
+                        }
+
                         // this.minQty = +this.coinInfo.lotSizeFilter.minOrderQty;
                     }
                     break;
@@ -413,5 +467,53 @@ export class OrderExecutionTracker extends EventEmitter {
         } catch (error) {
             console.error('Error getting coin info:', error);
         }
+    }
+
+    private async getExchangeFee() {
+        try {
+            const connectedExchangeClient = await this.exchangeClient;
+            switch (this.exchange) {
+                case 'bybit':
+                    if (connectedExchangeClient instanceof RestClientV5) {
+                        try {
+                            const fee =
+                                await connectedExchangeClient.getFeeRate({
+                                    category: 'spot',
+                                    symbol: this.coin,
+                                });
+                            this.feeTaker = fee.result.list[0]?.takerFeeRate;
+                            this.feeMaker = fee.result.list[0]?.makerFeeRate;
+                        } catch (error) {
+                            console.log(error);
+                        }
+                    }
+                    break;
+            }
+        } catch (error) {
+            console.error('Error getting fee: ', error);
+        }
+    }
+
+    private async calculateOrderFees(
+        qty?: number,
+        price?: number
+    ): Promise<{ qty: number; price: number } | number | undefined> {
+        await this.getExchangeFee();
+
+        if (price && !qty) {
+            return price - price * parseFloat(this.feeMaker);
+        }
+
+        if (qty && !price) {
+            return qty + qty * parseFloat(this.feeTaker);
+        }
+
+        if (qty && price) {
+            return {
+                qty: qty + qty * parseFloat(this.feeTaker),
+                price: price - price * parseFloat(this.feeMaker),
+            };
+        }
+        return;
     }
 }

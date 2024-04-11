@@ -10,6 +10,7 @@ import type {
 import { myBot } from '../router/routes';
 import { generateBotStrategy } from '../strategy/generateDCA';
 import { OrderType, StrategyType, TradeType } from './events';
+import { LoggerTracker } from './logEmitter';
 import { OrderExecutionTracker } from './ordersEmitter';
 import { StateFileManager } from './states/stateManager';
 
@@ -34,6 +35,7 @@ export class TradeTracker extends EventEmitter {
     private insuranceOrderID?: OrderId;
     private stateManager;
     private state: any;
+    private logger: LoggerTracker;
 
     constructor(
         initialCoin: string,
@@ -48,6 +50,7 @@ export class TradeTracker extends EventEmitter {
         this.onTakeProfit = false;
         this.onInsurance = false;
         this.stateManager = new StateFileManager(this.coin);
+        this.logger = new LoggerTracker();
         this.init();
         this.Order = new OrderExecutionTracker(
             this.client,
@@ -56,49 +59,38 @@ export class TradeTracker extends EventEmitter {
         );
 
         this.on(TradeType.UPDATE_PRICE, async () => {
+            this.logger.cleared(this.coinPricesCache.get(this.coin)!);
             try {
                 const baseStep = this.strategy[0];
                 const insuranceStep = this.strategy[1];
-                if (baseStep) {
-                    this.step = baseStep.step;
-
-                    if (this.baseOrderID && !this.onTakeProfit) {
-                        this.onTakeProfit = true;
-                        await this.Order.placeTakeProfitOrder(
-                            baseStep.summarizedOrderBasePairVolume,
-                            baseStep.orderTargetPrice
-                        );
-                        //CHECK PLACING BASE ORDER
-                    }
-
-                    // if (this.onTakeProfit && !this.onInsurance && baseStep) {
-                    //     const submittedInsurance =
-                    //         await this.Order.placeInsuranceOrder(
-                    //             this.coin,
-                    //             baseStep.summarizedOrderSecondaryPairVolume,
-                    //             baseStep.orderPriceToStep
-                    //         );
-
-                    //     if (submittedInsurance) {
-                    //         this.insuranceOrderID = submittedInsurance;
-                    //         this.onInsurance = true;
-                    //     }
-                    //     console.log(submittedInsurance);
-                    // }
-                    // await this.setState();
-                    // const orders = await this.Order.getActiveOrders(this.coin);
-                }
 
                 //NEXT STEP
                 if (
                     insuranceStep &&
+                    !this.onInsurance &&
                     +this.coinPricesCache.get(this.coin)! <=
                         insuranceStep.orderPriceToStep
                 ) {
+                    console.log(2);
+                    this.onInsurance = true;
                     this.step = +insuranceStep.step;
                     this.strategy.shift();
+                    await this.Order.placeInsuranceOrder(
+                        insuranceStep.summarizedOrderSecondaryPairVolume,
+                        insuranceStep.orderTargetPrice
+                    );
+                    await this.setState();
+                }
 
-                    console.table(this.strategy);
+                //TAKE PROFIT
+                if (baseStep && this.baseOrderID && !this.onTakeProfit) {
+                    console.log(1);
+                    this.onTakeProfit = true;
+                    await this.Order.placeTakeProfitOrder(
+                        baseStep.summarizedOrderSecondaryPairVolume,
+                        baseStep.orderTargetPrice
+                    );
+                    await this.setState();
                 }
 
                 //EXIT
@@ -107,33 +99,64 @@ export class TradeTracker extends EventEmitter {
                     +this.coinPricesCache.get(this.coin)! >=
                         baseStep.orderTargetPrice
                 ) {
-                    console.log('stop trade');
-                    this.emit(TradeType.STOP_TRADE);
+                    this.logger.base('stop trade');
+                    await this.stopTrade();
+                    await this.setState();
                 }
-                await this.setState();
             } catch (error) {}
         });
 
         this.Order.on(
             OrderType.TP_ORDER_SUCCESSFULLY_PLACED,
             async (orderId) => {
+                this.logger.base(`TP_ORDER_SUCCESSFULLY_PLACED - ${orderId}`);
                 this.takeProfitOrderID = orderId;
                 await this.setState();
             }
         );
 
-        this.Order.on(OrderType.TP_ORDER_PLACING_FAILED, async () => {
-            this.onTakeProfit = false;
-            await this.setState();
-        });
+        this.Order.on(
+            OrderType.TP_ORDER_PLACING_FAILED,
+            async (message: string) => {
+                this.onTakeProfit = false;
+                // this.logger.cleared(message);
+                await this.setState();
+            }
+        );
+
+        this.Order.on(
+            OrderType.INSURANCE_ORDER_SUCCESSFULLY_PLACED,
+            async (orderId) => {
+                this.logger.base(
+                    `INSURANCE_ORDER_SUCCESSFULLY_PLACED - ${orderId}`
+                );
+                this.insuranceOrderID = orderId;
+                await this.setState();
+            }
+        );
+
+        this.Order.on(
+            OrderType.INSURANCE_ORDER_PLACING_FAILED,
+            async (message: string) => {
+                this.onInsurance = false;
+                // this.logger.cleared(message);
+                await this.setState();
+            }
+        );
 
         this.Order.on(
             OrderType.BASE_ORDER_SUCCESSFULLY_PLACED,
             async (orderId) => {
+                this.logger.base(`BASE_ORDER_SUCCESSFULLY_PLACED - ${orderId}`);
                 this.baseOrderID = orderId;
                 await this.setState();
             }
         );
+
+        this.Order.on(OrderType.BASE_ORDER_PLACING_FAILED, async () => {
+            this.baseOrderID = undefined;
+            await this.setState();
+        });
     }
 
     private async setState() {
@@ -143,6 +166,9 @@ export class TradeTracker extends EventEmitter {
             currentStep: this.step,
             baseOrderID: this.baseOrderID,
             onTakeProfit: this.onTakeProfit,
+            takeProfitOrderID: this.takeProfitOrderID,
+            onInsurance: this.onInsurance,
+            insuranceOrderID: this.insuranceOrderID,
             // takeProfitOrderID: this.takeProfitOrderID,
             // onInsurance: this.onInsurance,
             // insuranceOrderID: this.insuranceOrderID,
@@ -165,7 +191,6 @@ export class TradeTracker extends EventEmitter {
             this.strategy = [];
         } else {
             this.strategy = strategy;
-
             await this.stateManager.saveState(this.state);
         }
 
@@ -173,21 +198,22 @@ export class TradeTracker extends EventEmitter {
     }
 
     private async startPongPrice() {
-        console.log();
+        this.logger.base('');
         this.ping = setInterval(async () => {
             const newPrice = await this.Order.getCoinPrice(this.coin);
             if (newPrice !== this.currentPrice) {
                 this.currentPrice = newPrice;
                 this.coinPricesCache.set(this.coin, newPrice);
+
                 this.emit(TradeType.UPDATE_PRICE);
             }
         }, 400);
     }
 
-    public async startTrade() {
+    async startTrade() {
         await this.generateStrategy();
-        console.log(this.coin);
-        console.table(this.strategy);
+        this.logger.base(this.coin);
+        this.logger.inTable(this.strategy);
         const baseStep = this.strategy[0];
         if (baseStep) {
             //CHECK WALLET BALANCE
@@ -198,21 +224,23 @@ export class TradeTracker extends EventEmitter {
                         baseStep.orderBasePairVolume
                     );
                 }
-                await this.startPongPrice();
             } else {
-                console.log(balance);
-                console.log(baseStep.orderBasePairVolume);
-
-                throw new Error('Insufficient balance');
+                throw new Error(`Insufficient balance`);
             }
+            if (!this.step) {
+                this.step = baseStep.step;
+            }
+            await this.startPongPrice();
         }
     }
 
-    public async stopTrade() {
+    async stopTrade() {
         await this.stateManager.clearStateFile();
         if (this.ping) {
             clearInterval(this.ping);
         }
+        this.onTakeProfit = false;
+        this.baseOrderID = undefined;
         this.emit(TradeType.STOP_TRADE);
     }
 
